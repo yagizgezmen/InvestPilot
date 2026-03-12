@@ -1,4 +1,4 @@
-import { MarketQuote, MarketHistoryItem } from "@/types";
+import { MarketQuote, MarketHistoryItem, ChartTimeRange } from "@/types";
 
 export interface MarketDataProvider {
     /**
@@ -13,10 +13,10 @@ export interface MarketDataProvider {
 
     /**
      * Get historical data for a symbol
-     * @param range e.g., '1D', '1W', '1M', '6M', '1Y'
+     * @param range e.g., '1D', '1W', '1M', '3M', '6M', '1Y', 'All'
      * @param interval e.g., '1d', '1h'
      */
-    getHistory(symbol: string, market: string | undefined, range: string, interval: string): Promise<MarketHistoryItem[]>;
+    getHistory(symbol: string, market: string | undefined, range: ChartTimeRange, interval: string): Promise<MarketHistoryItem[]>;
 }
 
 /**

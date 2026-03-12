@@ -1,5 +1,5 @@
 import { MarketDataProvider } from "./index";
-import { MarketQuote, MarketHistoryItem } from "@/types";
+import { MarketQuote, MarketHistoryItem, ChartTimeRange } from "@/types";
 
 export class TRMockProvider implements MarketDataProvider {
     async searchInstruments(query: string): Promise<any[]> {
@@ -15,11 +15,14 @@ export class TRMockProvider implements MarketDataProvider {
         };
     }
 
-    async getHistory(symbol: string, market: string | undefined, range: string, interval: string): Promise<MarketHistoryItem[]> {
+    async getHistory(symbol: string, market: string | undefined, range: ChartTimeRange, interval: string): Promise<MarketHistoryItem[]> {
         let numDays = 30;
+        if (range === "1D") numDays = 1;
         if (range === "1W") numDays = 7;
+        if (range === "3M") numDays = 90;
         if (range === "6M") numDays = 180;
         if (range === "1Y") numDays = 365;
+        if (range === "All") numDays = 365 * 5;
 
         let currentPrice = Math.random() * 50 + 10;
         const history: MarketHistoryItem[] = [];

@@ -1,5 +1,5 @@
 import { MarketDataProvider } from "./index";
-import { MarketQuote, MarketHistoryItem } from "@/types";
+import { MarketQuote, MarketHistoryItem, ChartTimeRange } from "@/types";
 
 export class YahooFinanceProvider implements MarketDataProvider {
     private baseUrl = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -35,7 +35,7 @@ export class YahooFinanceProvider implements MarketDataProvider {
         };
     }
 
-    async getHistory(symbol: string, market: string | undefined, range: string, interval: string): Promise<MarketHistoryItem[]> {
+    async getHistory(symbol: string, market: string | undefined, range: ChartTimeRange, interval: string): Promise<MarketHistoryItem[]> {
         const formattedSymbol = this.formatSymbol(symbol, market);
 
         // Map standard ranges to Yahoo ranges
@@ -43,8 +43,10 @@ export class YahooFinanceProvider implements MarketDataProvider {
         if (range === "1D") yRange = "1d";
         if (range === "1W") yRange = "5d";
         if (range === "1M") yRange = "1mo";
+        if (range === "3M") yRange = "3mo";
         if (range === "6M") yRange = "6mo";
         if (range === "1Y") yRange = "1y";
+        if (range === "All") yRange = "max";
 
         // Yahoo requires interval matching range roughly
         let yInterval = "1d";

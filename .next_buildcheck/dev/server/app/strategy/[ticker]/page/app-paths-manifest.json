@@ -1,0 +1,3 @@
+{
+  "/strategy/[ticker]/page": "app/strategy/[ticker]/page.js"
+}

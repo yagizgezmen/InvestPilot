@@ -1,5 +1,5 @@
 import { MarketDataProvider } from "./index";
-import { MarketQuote, MarketHistoryItem } from "@/types";
+import { MarketQuote, MarketHistoryItem, ChartTimeRange } from "@/types";
 
 export class CoinGeckoProvider implements MarketDataProvider {
     private baseUrl = "https://api.coingecko.com/api/v3";
@@ -94,7 +94,7 @@ export class CoinGeckoProvider implements MarketDataProvider {
         }
     }
 
-    async getHistory(symbol: string, market: string | undefined, range: string, interval: string): Promise<MarketHistoryItem[]> {
+    async getHistory(symbol: string, market: string | undefined, range: ChartTimeRange, interval: string): Promise<MarketHistoryItem[]> {
         const id = await this.getCoinId(symbol);
 
         // Map range to days
@@ -102,8 +102,10 @@ export class CoinGeckoProvider implements MarketDataProvider {
         if (range === "1D") days = "1";
         if (range === "1W") days = "7";
         if (range === "1M") days = "30";
+        if (range === "3M") days = "90";
         if (range === "6M") days = "180";
         if (range === "1Y") days = "365";
+        if (range === "All") days = "max";
 
         const url = `${this.baseUrl}/coins/${id}/market_chart?vs_currency=usd&days=${days}`;
         console.log(`[CoinGecko] Fetching History for ${symbol} via: ${url}`);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AssetClass, MarketData, Asset } from "@/types";
+import { AssetClass, MarketData, Asset, ChartTimeRange, ChartDisplayType } from "@/types";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Card } from "@/components/ui/Card";
@@ -35,11 +35,12 @@ interface DynamicAssetDashboardProps {
 
 export function DynamicAssetDashboard({ assetClass, defaultTicker, title }: DynamicAssetDashboardProps) {
     const [selectedAsset, setSelectedAsset] = useState<string>(defaultTicker);
-    const [timeRange, setTimeRange] = useState<string>("1M");
+    const [timeRange, setTimeRange] = useState<ChartTimeRange>("1M");
     const [currency, setCurrency] = useState<"USD" | "TRY">("USD");
-    const [chartType, setChartType] = useState<"area" | "line">("area");
+    const [chartType, setChartType] = useState<ChartDisplayType>("area");
     const [showSma20, setShowSma20] = useState<boolean>(false);
     const [showSma50, setShowSma50] = useState<boolean>(false);
+    const [showVolume, setShowVolume] = useState<boolean>(true);
 
     const [marketData, setMarketData] = useState<MarketData | null>(null);
     const [loadingMarket, setLoadingMarket] = useState(false);
@@ -51,6 +52,7 @@ export function DynamicAssetDashboard({ assetClass, defaultTicker, title }: Dyna
     const [searching, setSearching] = useState(false);
 
     const { watchlist, toggleWatchlist } = useWatchlist();
+    const selectedAssetMeta = searchResults.find((asset) => asset.ticker === selectedAsset);
 
     // 1. Fetch search results when debounced query changes
     useEffect(() => {
@@ -116,6 +118,19 @@ export function DynamicAssetDashboard({ assetClass, defaultTicker, title }: Dyna
         return volume.toLocaleString();
     };
     const changePct = marketData?.changePct ?? 0;
+    const chartTypeOptions = ["LINE", "AREA", "CANDLE", "BASE"] as const;
+    const chartTypeLabelMap: Record<ChartDisplayType, typeof chartTypeOptions[number]> = {
+        line: "LINE",
+        area: "AREA",
+        candlestick: "CANDLE",
+        baseline: "BASE",
+    };
+    const chartTypeValueMap: Record<typeof chartTypeOptions[number], ChartDisplayType> = {
+        LINE: "line",
+        AREA: "area",
+        CANDLE: "candlestick",
+        BASE: "baseline",
+    };
 
     return (
         <div className="space-y-16 animate-fade-in relative z-10 w-full mb-32">
@@ -267,7 +282,7 @@ export function DynamicAssetDashboard({ assetClass, defaultTicker, title }: Dyna
                     )}
 
                     {/* Chart Area */}
-                    <Card glass className="p-10 sm:p-12 h-[550px] flex flex-col items-center justify-center border-border/40 shadow-sm relative overflow-hidden">
+                    <Card glass className="p-6 sm:p-8 h-[640px] flex flex-col border-border/40 shadow-sm relative overflow-hidden bg-card/40 backdrop-blur-2xl">
                         {/* Stale Data Warning Banner */}
                         {marketData?.stale && (
                             <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-amber-500/10 border border-amber-500/30 text-amber-500 px-6 py-2.5 rounded-full text-xs font-bold flex items-center gap-3 shadow-md z-30 backdrop-blur-md">
@@ -279,7 +294,65 @@ export function DynamicAssetDashboard({ assetClass, defaultTicker, title }: Dyna
                             </div>
                         )}
 
-                        <div className="w-full h-full">
+                        <div className="w-full flex items-center justify-between gap-3 mb-4 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <SegmentedControl
+                                    options={["1D", "1W", "1M", "3M", "6M", "1Y", "All"]}
+                                    selected={timeRange}
+                                    onChange={(value) => setTimeRange(value as ChartTimeRange)}
+                                    className="max-w-full"
+                                />
+                                <SegmentedControl
+                                    options={[...chartTypeOptions]}
+                                    selected={chartTypeLabelMap[chartType]}
+                                    onChange={(val) => setChartType(chartTypeValueMap[val as keyof typeof chartTypeValueMap])}
+                                />
+                                <button
+                                    onClick={() => setShowSma20((prev) => !prev)}
+                                    className={clsx(
+                                        "px-2.5 py-1.5 text-[10px] font-black rounded-lg border transition-colors",
+                                        showSma20
+                                            ? "bg-blue-500/15 border-blue-400/40 text-blue-300"
+                                            : "bg-background border-border text-muted-foreground hover:bg-secondary",
+                                    )}
+                                >
+                                    SMA20
+                                </button>
+                                <button
+                                    onClick={() => setShowSma50((prev) => !prev)}
+                                    className={clsx(
+                                        "px-2.5 py-1.5 text-[10px] font-black rounded-lg border transition-colors",
+                                        showSma50
+                                            ? "bg-amber-500/15 border-amber-400/40 text-amber-300"
+                                            : "bg-background border-border text-muted-foreground hover:bg-secondary",
+                                    )}
+                                >
+                                    SMA50
+                                </button>
+                                <button
+                                    onClick={() => setShowVolume((prev) => !prev)}
+                                    className={clsx(
+                                        "px-2.5 py-1.5 text-[10px] font-black rounded-lg border transition-colors",
+                                        showVolume
+                                            ? "bg-violet-500/15 border-violet-400/40 text-violet-300"
+                                            : "bg-background border-border text-muted-foreground hover:bg-secondary",
+                                    )}
+                                >
+                                    Volume
+                                </button>
+                            </div>
+                            {marketData && (
+                                <button
+                                    onClick={() => toggleWatchlist(marketData.ticker)}
+                                    className="p-2 bg-background border border-border rounded-lg shadow-sm hover:bg-secondary transition-colors"
+                                    title="Toggle Watchlist"
+                                >
+                                    <svg className={`h-5 w-5 ${isSelectedWatchlist ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="w-full h-full min-h-0">
                             {loadingMarket ? (
                                 <Skeleton className="h-full w-full" />
                             ) : marketError ? (
@@ -306,54 +379,15 @@ export function DynamicAssetDashboard({ assetClass, defaultTicker, title }: Dyna
                                     Select an asset to view market data
                                 </div>
                             ) : (
-                                <div className="h-full w-full relative group">
-                                    {/* Action Header in Chart */}
-                                    <div className="absolute top-0 right-0 z-10 flex gap-2">
-                                        <button
-                                            onClick={() => toggleWatchlist(marketData.ticker)}
-                                            className="p-1.5 bg-background border border-border rounded-lg shadow-sm hover:bg-secondary transition-colors"
-                                            title="Toggle Watchlist"
-                                        >
-                                            <svg className={`h-5 w-5 ${isSelectedWatchlist ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                                        </button>
-                                        <SegmentedControl
-                                            options={["1D", "1W", "1M", "6M", "1Y"]}
-                                            selected={timeRange}
-                                            onChange={setTimeRange}
-                                        />
-                                        <SegmentedControl
-                                            options={["AREA", "LINE"]}
-                                            selected={chartType.toUpperCase()}
-                                            onChange={(val) => setChartType(val.toLowerCase() as "area" | "line")}
-                                        />
-                                        <button
-                                            onClick={() => setShowSma20((prev) => !prev)}
-                                            className={clsx(
-                                                "px-2.5 py-1.5 text-[10px] font-black rounded-lg border transition-colors",
-                                                showSma20
-                                                    ? "bg-blue-500/15 border-blue-400/40 text-blue-300"
-                                                    : "bg-background border-border text-muted-foreground hover:bg-secondary",
-                                            )}
-                                        >
-                                            SMA20
-                                        </button>
-                                        <button
-                                            onClick={() => setShowSma50((prev) => !prev)}
-                                            className={clsx(
-                                                "px-2.5 py-1.5 text-[10px] font-black rounded-lg border transition-colors",
-                                                showSma50
-                                                    ? "bg-amber-500/15 border-amber-400/40 text-amber-300"
-                                                    : "bg-background border-border text-muted-foreground hover:bg-secondary",
-                                            )}
-                                        >
-                                            SMA50
-                                        </button>
-                                    </div>
+                                <div className="h-full w-full">
                                     <PriceChart
                                         data={marketData}
+                                        assetName={selectedAssetMeta?.name}
                                         chartType={chartType}
                                         showSma20={showSma20}
                                         showSma50={showSma50}
+                                        showVolume={showVolume}
+                                        timeRange={timeRange}
                                     />
                                 </div>
                             )}

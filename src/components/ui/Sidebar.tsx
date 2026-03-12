@@ -2,13 +2,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Compass, LineChart, Sparkles, LayoutDashboard, Settings, ChevronRight } from "lucide-react";
+import { Compass, LineChart, LayoutDashboard, Settings, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 
 const TABS = [
     { name: "Market", path: "/", icon: LayoutDashboard },
     { name: "Implementation", path: "/method", icon: Compass },
-    { name: "Invest", path: "/opportunities", icon: Sparkles },
 ];
 
 export function Sidebar() {

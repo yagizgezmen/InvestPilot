@@ -1,0 +1,16 @@
+{
+  "/(markets)/crypto/page": "app/(markets)/crypto/page.js",
+  "/(markets)/precious-metals/page": "app/(markets)/precious-metals/page.js",
+  "/(markets)/us-stocks/page": "app/(markets)/us-stocks/page.js",
+  "/api/assets/route": "app/api/assets/route.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/best-opportunities/route": "app/api/best-opportunities/route.js",
+  "/api/market-data/route": "app/api/market-data/route.js",
+  "/api/search/route": "app/api/search/route.js",
+  "/api/strategy/[ticker]/route": "app/api/strategy/[ticker]/route.js",
+  "/method/page": "app/method/page.js",
+  "/opportunities/page": "app/opportunities/page.js",
+  "/page": "app/page.js",
+  "/strategy/[ticker]/asset/[assetTicker]/page": "app/strategy/[ticker]/asset/[assetTicker]/page.js",
+  "/strategy/[ticker]/page": "app/strategy/[ticker]/page.js"
+}

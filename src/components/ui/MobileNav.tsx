@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, Sparkles, LayoutDashboard } from "lucide-react";
+import { Compass, LayoutDashboard } from "lucide-react";
 import clsx from "clsx";
 
 const TABS = [
     { name: "Market Overview", path: "/", icon: LayoutDashboard },
     { name: "Implementation", path: "/method", icon: Compass },
-    { name: "Best to Invest", path: "/opportunities", icon: Sparkles },
 ];
 
 export function MobileNav() {

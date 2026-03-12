@@ -1,4 +1,4 @@
-import { Asset, MarketData, MarketHistoryItem, MarketQuote, AssetClass } from "@/types";
+import { Asset, MarketData, MarketHistoryItem, MarketQuote, AssetClass, ChartTimeRange } from "@/types";
 import { MarketDataProvider, FxProvider } from "./providers";
 import { CoinGeckoProvider } from "./providers/CoinGeckoProvider";
 import { YahooFinanceProvider } from "./providers/YahooProvider";
@@ -29,7 +29,7 @@ export class MarketDataService {
 
     private USE_MOCK_TR_DATA = process.env.USE_MOCK_TR_DATA !== "false"; // Default true
 
-    async getMarketData(ticker: string, requestedCurrency: "USD" | "TRY" = "USD", range: string = "1M"): Promise<MarketData> {
+    async getMarketData(ticker: string, requestedCurrency: "USD" | "TRY" = "USD", range: ChartTimeRange = "1M"): Promise<MarketData> {
         const assetClass = this.getAssetClass(ticker);
         let originalCurrency = "USD";
         if (assetClass === "TR Stocks") originalCurrency = "TRY";

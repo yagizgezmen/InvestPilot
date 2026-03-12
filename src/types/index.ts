@@ -37,6 +37,9 @@ export interface MarketData {
   stale?: boolean; // Indicates if data is served from stale cache
 }
 
+export type ChartTimeRange = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y" | "All";
+export type ChartDisplayType = "line" | "area" | "candlestick" | "baseline";
+
 export type RiskProfile = "Conservative" | "Balanced" | "Aggressive";
 export type TimeHorizon = "0-6m" | "6-24m" | "2y+";
 
