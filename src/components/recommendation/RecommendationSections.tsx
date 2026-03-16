@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
 import PriceChart from "@/components/PriceChart";
-import type { AssetStrategy, MarketData } from "@/types";
+import type { AssetStrategy, MarketData, RecommendationFactorBreakdown } from "@/types";
 import {
   BarChart3,
   BookOpen,
@@ -56,6 +56,11 @@ interface MethodologyDrawerProps {
   isOpen: boolean;
   methodology: MethodologyModel;
   onClose: () => void;
+}
+
+interface FactorBreakdownCardProps {
+  factors: RecommendationFactorBreakdown[];
+  methodology: MethodologyModel;
 }
 
 interface DecisionSupportCardProps {
@@ -431,6 +436,67 @@ export function DecisionSupportCard({ section }: DecisionSupportCardProps) {
   );
 }
 
+export function FactorBreakdownCard({ factors, methodology }: FactorBreakdownCardProps) {
+  const visibleFactors = factors.slice(0, 6);
+
+  return (
+    <WorkspaceSection title="Factor breakdown" eyebrow="Explainability" icon={Gauge}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="px-3 py-1 text-[10px] tracking-[0.18em]">
+          Confidence {methodology.confidenceBand}
+        </Badge>
+        <Badge variant="outline" className="px-3 py-1 text-[10px] tracking-[0.18em]">
+          {visibleFactors.length} active factors
+        </Badge>
+      </div>
+
+      {visibleFactors.length === 0 ? (
+        <div className="mt-5 rounded-3xl border border-border/35 bg-background/20 p-5">
+          <p className="text-sm leading-7 text-muted-foreground">
+            Factor-level scoring is not available for this asset yet. The recommendation is using the broader strategy summary instead.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 space-y-3">
+          {visibleFactors.map((factor) => {
+            const badgeVariant =
+              factor.impact === "Positive" ? "success" : factor.impact === "Negative" ? "destructive" : "outline";
+            const barClass =
+              factor.impact === "Positive" ? "bg-success" : factor.impact === "Negative" ? "bg-destructive" : "bg-warning";
+
+            return (
+              <div key={factor.key} className="rounded-2xl border border-border/30 bg-background/25 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-black text-foreground">{factor.label}</p>
+                      <Badge variant={badgeVariant}>{factor.impact}</Badge>
+                    </div>
+                    <p className="mt-2 text-sm leading-7 text-muted-foreground">{factor.summary}</p>
+                    <p className="mt-2 text-xs text-muted-foreground/80">{factor.rawValue}</p>
+                  </div>
+                  <div className="w-full sm:w-44">
+                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                      <span>Score {Math.round(factor.normalizedScore)}</span>
+                      <span>Weight {factor.weight}%</span>
+                    </div>
+                    <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-secondary/50">
+                      <div className={clsx("h-full rounded-full", barClass)} style={{ width: `${factor.normalizedScore}%` }} />
+                    </div>
+                    <div className="mt-2 text-right text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                      Impact {factor.weightedContribution.toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </WorkspaceSection>
+  );
+}
+
 export function MethodologySummaryCard({ methodology, disclosureItems, onOpen }: MethodologySummaryCardProps) {
   return (
     <WorkspaceSection title="Disclosure / methodology summary" eyebrow="Guardrails" icon={BookOpen}>
@@ -445,6 +511,9 @@ export function MethodologySummaryCard({ methodology, disclosureItems, onOpen }:
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge variant="outline" className="px-3 py-1 text-[10px] tracking-[0.18em]">
                 Latest data {methodology.latestDataTimestamp}
+              </Badge>
+              <Badge variant="outline" className="px-3 py-1 text-[10px] tracking-[0.18em]">
+                Confidence {methodology.confidenceBand}
               </Badge>
               {methodology.missingDataWarning && (
                 <Badge variant="warning" className="px-3 py-1 text-[10px] tracking-[0.18em]">
@@ -473,12 +542,81 @@ export function MethodologyDrawer({ isOpen, methodology, onClose }: MethodologyD
           <p className="mt-2 text-sm leading-7 text-muted-foreground">{methodology.summary}</p>
         </div>
 
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-3xl border border-border/35 bg-background/20 p-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Confidence Band</div>
+            <p className="mt-2 text-sm font-black text-foreground">{methodology.confidenceBand}</p>
+          </div>
+          <div className="rounded-3xl border border-border/35 bg-background/20 p-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Active Factors</div>
+            <p className="mt-2 text-sm font-black text-foreground">{methodology.factorBreakdown.length}</p>
+          </div>
+        </div>
+
         <div>
           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">What this recommendation uses</div>
           <div className="mt-4">
             <BulletList items={methodology.factors} />
           </div>
         </div>
+
+        {methodology.factorBreakdown.length > 0 && (
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Factor Contributions</div>
+            <div className="mt-4 space-y-3">
+              {methodology.factorBreakdown.map((factor) => (
+                <div key={factor.key} className="rounded-3xl border border-border/35 bg-background/20 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-black text-foreground">{factor.label}</p>
+                        <Badge variant={factor.impact === "Positive" ? "success" : factor.impact === "Negative" ? "destructive" : "outline"}>
+                          {factor.impact}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm leading-7 text-muted-foreground">{factor.summary}</p>
+                      <p className="mt-2 text-xs text-muted-foreground/80">{factor.rawValue}</p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <div>Weight {factor.weight}%</div>
+                      <div className="mt-1">Score {Math.round(factor.normalizedScore)}</div>
+                      <div className="mt-1">Impact {factor.weightedContribution.toFixed(1)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-3xl border border-border/35 bg-background/20 p-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Risk Profile Adjustment</div>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">{methodology.riskAdjustmentNote}</p>
+          </div>
+          <div className="rounded-3xl border border-border/35 bg-background/20 p-5">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Time Horizon Adjustment</div>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">{methodology.horizonAdjustmentNote}</p>
+          </div>
+        </div>
+
+        {methodology.dominantDrivers.length > 0 && (
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">What Helped the Result</div>
+            <div className="mt-4">
+              <BulletList items={methodology.dominantDrivers} />
+            </div>
+          </div>
+        )}
+
+        {methodology.cautionFlags.length > 0 && (
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">What Hurt the Result</div>
+            <div className="mt-4">
+              <BulletList items={methodology.cautionFlags} accent="text-warning" />
+            </div>
+          </div>
+        )}
 
         <div className="rounded-3xl border border-border/35 bg-background/20 p-5">
           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Latest Data Timestamp</div>
@@ -498,6 +636,15 @@ export function MethodologyDrawer({ isOpen, methodology, onClose }: MethodologyD
             <BulletList items={methodology.limitations} />
           </div>
         </div>
+
+        {methodology.uncertaintyNotes.length > 0 && (
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Uncertainty Notes</div>
+            <div className="mt-4">
+              <BulletList items={methodology.uncertaintyNotes} accent="text-warning" />
+            </div>
+          </div>
+        )}
 
         <div className="rounded-3xl border border-border/35 bg-background/20 p-5">
           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Educational / Non-Guarantee</div>

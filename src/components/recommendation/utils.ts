@@ -1,4 +1,9 @@
-import type { AssetStrategy, MarketData } from "@/types";
+import type {
+  AssetStrategy,
+  MarketData,
+  RecommendationFactorBreakdown,
+  RecommendationFactorKey,
+} from "@/types";
 import {
   BarChart3,
   Eye,
@@ -199,15 +204,49 @@ export function buildRiskOverview(strategy: AssetStrategy, marketData: MarketDat
   };
 }
 
-function getFactorStatus(score?: number): DriverStatus {
-  if (score === undefined) return "Neutral";
-  if (score >= 65) return "Positive";
-  if (score <= 40) return "Cautious";
+function getFactor(strategy: AssetStrategy, key: RecommendationFactorKey): RecommendationFactorBreakdown | undefined {
+  return strategy.factorBreakdown?.find((factor) => factor.key === key);
+}
+
+function getFactorStatusFromImpact(impact?: RecommendationFactorBreakdown["impact"]): DriverStatus {
+  if (impact === "Positive") return "Positive";
+  if (impact === "Negative") return "Cautious";
   return "Neutral";
 }
 
-function getFactorScore(strategy: AssetStrategy, key: string): number | undefined {
-  return strategy.factorBreakdown?.find((factor) => factor.key === key)?.normalizedScore;
+function trimSentence(value: string): string {
+  return value.trim().replace(/\.$/, "");
+}
+
+function buildFactorSupportExplanation(
+  factor: RecommendationFactorBreakdown,
+  suffix: string,
+): string {
+  return `${trimSentence(factor.summary)} (${factor.rawValue}). ${suffix}`;
+}
+
+function buildProfileFitSupport(profileFit: ProfileFitModel): DecisionSupportItem | null {
+  if (profileFit.fit === "Strong fit") return null;
+
+  return {
+    title: "Profile Fit",
+    status: profileFit.fit === "Weak fit" ? "Cautious" : "Neutral",
+    explanation:
+      profileFit.fit === "Weak fit"
+        ? "The setup does not line up cleanly with the current user profile, which lowers conviction even if market factors improve."
+        : "Personal fit is acceptable, but it is not strong enough to ignore entry discipline and ongoing risk control.",
+  };
+}
+
+function buildDataQualitySupport(factor: RecommendationFactorBreakdown): DecisionSupportItem {
+  return {
+    title: "Data Quality",
+    status: "Cautious",
+    explanation: buildFactorSupportExplanation(
+      factor,
+      "Confidence stays lower until fresher or deeper history confirms the setup."
+    ),
+  };
 }
 
 function pushDecisionSupportItem(
@@ -225,134 +264,172 @@ export function buildDecisionSupport(
   decision: Decision,
   profileFit: ProfileFitModel,
 ): DecisionSupportModel {
-  const trendScore = getFactorScore(strategy, "trendStrength");
-  const shortMomentumScore = getFactorScore(strategy, "shortTermMomentum");
-  const mediumMomentumScore = getFactorScore(strategy, "mediumTermMomentum");
-  const volatilityScore = getFactorScore(strategy, "volatilityRisk");
-  const drawdownScore = getFactorScore(strategy, "drawdownRisk");
-  const structureScore = getFactorScore(strategy, "structuralTrendAlignment");
-  const dataQualityScore = getFactorScore(strategy, "dataQuality");
-
   const items: DecisionSupportItem[] = [];
+  const trendFactor = getFactor(strategy, "trendStrength");
+  const shortMomentumFactor = getFactor(strategy, "shortTermMomentum");
+  const mediumMomentumFactor = getFactor(strategy, "mediumTermMomentum");
+  const volatilityFactor = getFactor(strategy, "volatilityRisk");
+  const drawdownFactor = getFactor(strategy, "drawdownRisk");
+  const structureFactor = getFactor(strategy, "structuralTrendAlignment");
+  const dataQualityFactor = getFactor(strategy, "dataQuality");
 
-  if (decision === "INVEST") {
-    pushDecisionSupportItem(
-      items,
-      "Trend Risk",
-      getFactorStatus(trendScore),
-      trendScore !== undefined && trendScore < 70
-        ? "Trend quality is supportive enough to invest, but it is not strong enough to ignore a failed trend continuation."
-        : "Trend structure is constructive, but the position still depends on the current trend staying intact after entry."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Volatility Control",
-      getFactorStatus(volatilityScore),
-      volatilityScore !== undefined && volatilityScore <= 45
-        ? "Volatility remains elevated enough that staged sizing and disciplined entries matter even with a positive recommendation."
-        : "Even in a cleaner setup, volatility can still create uneven entry timing and interim pullbacks."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Reward vs Risk",
-      getFactorStatus(structureScore),
-      structureScore !== undefined && structureScore < 60
-        ? "The upside case exists, but reward-to-risk improves only if price respects support and confirms above breakout levels."
-        : "The current setup is favorable, but the case weakens quickly if support fails after entry."
-    );
-    if (dataQualityScore !== undefined && dataQualityScore < 60) {
-      pushDecisionSupportItem(
-        items,
-        "Data Confidence",
-        "Cautious",
-        "Data quality is not ideal, so the invest case should still be reviewed against fresh prices before sizing up."
-      );
+  const investItems: Array<DecisionSupportItem | null> = [
+    trendFactor
+      ? {
+          title: "Trend Integrity",
+          status: getFactorStatusFromImpact(trendFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            trendFactor,
+            "The invest case stays valid while this trend remains intact after entry."
+          ),
+        }
+      : null,
+    volatilityFactor
+      ? {
+          title: "Volatility Control",
+          status: getFactorStatusFromImpact(volatilityFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            volatilityFactor,
+            volatilityFactor.normalizedScore <= 45
+              ? "That keeps staged sizing and disciplined execution important even with a positive recommendation."
+              : "Even in a constructive setup, pullbacks can still create uneven entry quality."
+          ),
+        }
+      : null,
+    structureFactor
+      ? {
+          title: "Reward-to-Risk",
+          status: getFactorStatusFromImpact(structureFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            structureFactor,
+            "Reward-to-risk stays healthier if price holds its current support structure and respects breakout confirmation."
+          ),
+        }
+      : null,
+    dataQualityFactor && dataQualityFactor.normalizedScore < 65
+      ? buildDataQualitySupport(dataQualityFactor)
+      : null,
+  ];
+
+  const monitorItems: Array<DecisionSupportItem | null> = [
+    trendFactor
+      ? {
+          title: "Trend Confirmation",
+          status: getFactorStatusFromImpact(trendFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            trendFactor,
+            "That is why the setup remains on watch instead of moving into active deployment."
+          ),
+        }
+      : null,
+    mediumMomentumFactor
+      ? {
+          title: "Momentum Follow-Through",
+          status: getFactorStatusFromImpact(mediumMomentumFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            mediumMomentumFactor,
+            "The system needs cleaner follow-through here before it upgrades the recommendation."
+          ),
+        }
+      : null,
+    structureFactor
+      ? {
+          title: "Structural Setup",
+          status: getFactorStatusFromImpact(structureFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            structureFactor,
+            "The moving-average stack is not strong enough yet to justify a more bullish stance."
+          ),
+        }
+      : null,
+    buildProfileFitSupport(profileFit),
+  ];
+
+  const avoidItems: Array<DecisionSupportItem | null> = [
+    trendFactor
+      ? {
+          title: "Weak Trend",
+          status: getFactorStatusFromImpact(trendFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            trendFactor,
+            "That leaves the setup without enough directional support for fresh exposure."
+          ),
+        }
+      : null,
+    drawdownFactor
+      ? {
+          title: "Downside Risk",
+          status: getFactorStatusFromImpact(drawdownFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            drawdownFactor,
+            "The downside profile is too heavy for the current return outlook."
+          ),
+        }
+      : null,
+    volatilityFactor
+      ? {
+          title: "Volatility Burden",
+          status: getFactorStatusFromImpact(volatilityFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            volatilityFactor,
+            "That makes timing less forgiving and weakens the case for new exposure."
+          ),
+        }
+      : null,
+    shortMomentumFactor
+      ? {
+          title: "Reward-to-Risk",
+          status: getFactorStatusFromImpact(shortMomentumFactor.impact),
+          explanation: buildFactorSupportExplanation(
+            shortMomentumFactor,
+            "Recent momentum is not strong enough to offset the current risk and uncertainty."
+          ),
+        }
+      : null,
+  ];
+
+  const preferredItems =
+    decision === "INVEST"
+      ? investItems
+      : decision === "MONITOR"
+        ? monitorItems
+        : avoidItems;
+
+  preferredItems.forEach((item) => {
+    if (!item) return;
+    pushDecisionSupportItem(items, item.title, item.status, item.explanation);
+  });
+
+  if (items.length < 4 && dataQualityFactor && dataQualityFactor.normalizedScore < 65) {
+    const dataQualityItem = buildDataQualitySupport(dataQualityFactor);
+    pushDecisionSupportItem(items, dataQualityItem.title, dataQualityItem.status, dataQualityItem.explanation);
+  }
+
+  if (items.length < 4) {
+    const profileItem = buildProfileFitSupport(profileFit);
+    if (profileItem) {
+      pushDecisionSupportItem(items, profileItem.title, profileItem.status, profileItem.explanation);
     }
-  } else if (decision === "MONITOR") {
+  }
+
+  if (items.length < 4 && strategy.expectedReturnOutlook) {
     pushDecisionSupportItem(
       items,
-      "Trend Confirmation",
-      getFactorStatus(trendScore),
-      trendScore !== undefined && trendScore < 55
-        ? "Trend strength is still mixed, which keeps this setup on watch instead of in active deployment."
-        : "Trend is improving, but it still needs cleaner confirmation before the system turns fully constructive."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Momentum Follow-Through",
-      getFactorStatus(mediumMomentumScore),
-      mediumMomentumScore !== undefined && mediumMomentumScore < 55
-        ? "Medium-term momentum is not yet strong enough to support a more bullish stance."
-        : "Momentum has stabilized, but follow-through is still not decisive enough to upgrade the call."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Structural Setup",
-      getFactorStatus(structureScore),
-      structureScore !== undefined && structureScore < 55
-        ? "Moving-average structure is not fully aligned yet, so waiting for a cleaner setup is more sensible."
-        : "Structural trend alignment is improving, but not enough to remove the wait-and-watch posture."
-    );
-    if (profileFit.fit === "Weak fit") {
-      pushDecisionSupportItem(
-        items,
-        "Profile Alignment",
-        "Cautious",
-        "The setup remains on watch partly because it does not line up cleanly with the current user profile."
-      );
-    }
-  } else {
-    pushDecisionSupportItem(
-      items,
-      "Weak Trend",
-      getFactorStatus(trendScore),
-      trendScore !== undefined && trendScore <= 45
-        ? "Trend quality is not strong enough to justify fresh exposure right now."
-        : "The trend does not provide enough support to offset the current downside risk."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Downside Risk",
-      getFactorStatus(drawdownScore),
-      drawdownScore !== undefined && drawdownScore <= 45
-        ? "Historical drawdown behavior remains too heavy for the current return outlook."
-        : "Downside resilience is still too weak relative to the current opportunity set."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Volatility Burden",
-      getFactorStatus(volatilityScore),
-      volatilityScore !== undefined && volatilityScore <= 45
-        ? "Volatility is elevated enough to make entries unattractive unless conditions improve materially."
-        : "The current setup still carries more volatility than the expected payoff justifies."
-    );
-    pushDecisionSupportItem(
-      items,
-      "Reward-to-Risk",
-      getFactorStatus(shortMomentumScore),
-      shortMomentumScore !== undefined && shortMomentumScore < 50
-        ? "Recent momentum is not compensating enough for the current risk profile."
-        : "The upside case does not look strong enough to justify the current risk and uncertainty."
+      "Return Outlook",
+      decision === "AVOID" ? "Cautious" : "Neutral",
+      strategy.expectedReturnOutlook.baseCase
     );
   }
 
-  if (items.length < 4 && dataQualityScore !== undefined && dataQualityScore < 65) {
+  if (items.length < 4) {
     pushDecisionSupportItem(
       items,
-      "Data Quality",
-      "Cautious",
-      "Data freshness or sample depth is limiting confidence, so the recommendation should be treated more carefully."
-    );
-  }
-
-  if (items.length < 4 && profileFit.fit !== "Strong fit") {
-    pushDecisionSupportItem(
-      items,
-      "Profile Fit",
-      profileFit.fit === "Weak fit" ? "Cautious" : "Neutral",
-      profileFit.fit === "Weak fit"
-        ? "The setup does not align especially well with the current user profile, which weakens conviction."
-        : "Personal fit is acceptable but not strong enough to ignore execution and risk discipline."
+      "Implementation Discipline",
+      decision === "INVEST" ? "Neutral" : "Cautious",
+      strategy.investmentStrategy.plan.riskManagement[0] ??
+        strategy.investmentStrategy.limitations[0] ??
+        strategy.investmentStrategy.cons[0] ??
+        "Execution discipline remains important while the setup develops."
     );
   }
 
@@ -437,6 +514,20 @@ export function buildDecisionHero(
     timeHorizon: strategy.investmentStrategy.plan.duration,
     summary,
   };
+}
+
+function formatScoringRiskProfile(
+  strategy: AssetStrategy,
+  userPreferences?: UserPreferenceProfile | null,
+): string {
+  return userPreferences?.riskProfile ?? strategy.scoringContext?.riskProfile ?? "Balanced";
+}
+
+function formatScoringHorizon(
+  strategy: AssetStrategy,
+  userPreferences?: UserPreferenceProfile | null,
+): string {
+  return userPreferences?.timeHorizon ?? strategy.scoringContext?.timeHorizon ?? "6-24m";
 }
 
 export function buildActionPlan(strategy: AssetStrategy, decision: Decision): ActionPlanModel {
@@ -619,13 +710,23 @@ function formatLatestTimestamp(marketData: MarketData | null): string {
   });
 }
 
-export function buildMethodology(strategy: AssetStrategy, marketData: MarketData | null): MethodologyModel {
-  const factors = [
-    "Price trend and short-term momentum",
-    "Risk score and volatility profile",
-    "Recommended method, cadence, and position sizing",
-    "Technical and fundamental drivers from the strategy engine",
-  ];
+export function buildMethodology(
+  strategy: AssetStrategy,
+  marketData: MarketData | null,
+  userPreferences?: UserPreferenceProfile | null,
+  profileFit?: ProfileFitModel,
+): MethodologyModel {
+  const factorBreakdown = [...(strategy.factorBreakdown ?? [])].sort(
+    (a, b) => b.weightedContribution - a.weightedContribution
+  );
+  const factors = factorBreakdown.length > 0
+    ? factorBreakdown.map((factor) => `${factor.label}: ${factor.summary}`)
+    : [
+        "Price trend and short-term momentum",
+        "Risk score and volatility profile",
+        "Recommended method, cadence, and position sizing",
+        "Technical and fundamental drivers from the strategy engine",
+      ];
 
   const limitations = [
     ...strategy.investmentStrategy.limitations.slice(0, 2),
@@ -638,12 +739,41 @@ export function buildMethodology(strategy: AssetStrategy, marketData: MarketData
       ? "Some market data fields are unavailable, so parts of the recommendation rely more heavily on strategy defaults."
       : undefined;
 
+  const confidenceBand = strategy.scoreConfidence ?? strategy.expectedReturnOutlook?.confidence ?? "Medium";
+  const scoringRiskProfile = formatScoringRiskProfile(strategy, userPreferences);
+  const scoringHorizon = formatScoringHorizon(strategy, userPreferences);
+  const riskAdjustmentNote = userPreferences
+    ? `The recommendation is interpreted through a ${scoringRiskProfile.toLowerCase()} risk lens, while profile fit separately checks whether that lens matches the current user preferences.`
+    : `This asset score is currently interpreted through a ${scoringRiskProfile.toLowerCase()} risk lens. Add saved preferences to personalize the fit layer further.`;
+  const horizonAdjustmentNote = userPreferences
+    ? `The analysis is framed around a ${scoringHorizon} horizon, which affects how momentum, structure, and volatility are weighted in the recommendation context.`
+    : `The analysis currently uses a ${scoringHorizon} default horizon, so shorter- or longer-term users should treat the fit section as the personalization layer.`;
+  const uncertaintyNotes = [
+    missingDataWarning,
+    confidenceBand === "Low"
+      ? "Confidence is limited because factor agreement is weak or data quality is not strong enough."
+      : confidenceBand === "Medium"
+        ? "Confidence is moderate, which means the factors point in a usable direction but do not remove execution risk."
+        : "Confidence is higher because the major factors are more aligned, though this still does not remove market risk.",
+    ...(strategy.cautionFlags ?? []).slice(0, 2),
+    profileFit && profileFit.fit !== "Strong fit"
+      ? `Profile fit is ${profileFit.fit.toLowerCase()}, so personal suitability is not as strong as the market setup alone.`
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+
   return {
     summary: "This recommendation combines market context, risk framing, and implementation guidance into a single decision workspace.",
     factors,
     latestDataTimestamp: formatLatestTimestamp(marketData),
     limitations,
     missingDataWarning,
+    factorBreakdown,
+    confidenceBand,
+    dominantDrivers: strategy.dominantDrivers ?? [],
+    cautionFlags: strategy.cautionFlags ?? [],
+    riskAdjustmentNote,
+    horizonAdjustmentNote,
+    uncertaintyNotes,
     disclosure:
       strategy.investmentStrategy.disclaimer ||
       "Educational use only. This does not guarantee outcomes and should not be treated as financial advice.",

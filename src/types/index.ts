@@ -198,4 +198,8 @@ export interface AssetStrategy {
   investmentStrategy: InvestmentStrategy;
   factorBreakdown?: RecommendationFactorBreakdown[];
   expectedReturnOutlook?: ExpectedReturnOutlook;
+  scoringContext?: RecommendationScoreResult["context"];
+  scoreConfidence?: RecommendationScoreResult["confidence"];
+  dominantDrivers?: string[];
+  cautionFlags?: string[];
 }

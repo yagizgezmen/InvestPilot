@@ -11,6 +11,7 @@ import {
   DecisionSupportCard,
   DecisionHero,
   DetailAnalysisSection,
+  FactorBreakdownCard,
   MethodologyDrawer,
   MethodologySummaryCard,
   ProfileFitCard,
@@ -57,9 +58,10 @@ function buildViewModel(
     actionPlan: buildActionPlan(strategy, decision),
     profileFit,
     userPreferences,
-    methodology: buildMethodology(strategy, marketData),
+    methodology: buildMethodology(strategy, marketData, userPreferences, profileFit),
     recommendationDrivers: buildDrivers(strategy, marketData),
     decisionSupport: buildDecisionSupport(strategy, decision, profileFit),
+    factorBreakdown: strategy.factorBreakdown ?? [],
     disclosureItems: [
       ...strategy.investmentStrategy.assumptions.slice(0, 2),
       ...strategy.investmentStrategy.limitations.slice(0, 2),
@@ -231,6 +233,7 @@ export default function StrategyExperience({ ticker, parentTicker, detailMode = 
             theme={viewModel.theme}
           />
           <RationaleList drivers={viewModel.recommendationDrivers} />
+          <FactorBreakdownCard factors={viewModel.factorBreakdown} methodology={viewModel.methodology} />
           <ActionPlanCard
             actionPlan={viewModel.actionPlan}
             theme={viewModel.theme}

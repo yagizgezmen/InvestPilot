@@ -1,5 +1,10 @@
 import type { BadgeProps } from "@/components/ui/Badge";
-import type { AssetStrategy, MarketData } from "@/types";
+import type {
+  AssetStrategy,
+  MarketData,
+  RecommendationFactorBreakdown,
+  RecommendationScoreResult,
+} from "@/types";
 import type { LucideIcon } from "lucide-react";
 
 export type Decision = "INVEST" | "AVOID" | "MONITOR";
@@ -80,6 +85,13 @@ export interface MethodologyModel {
   limitations: string[];
   missingDataWarning?: string;
   disclosure: string;
+  factorBreakdown: RecommendationFactorBreakdown[];
+  confidenceBand: RecommendationScoreResult["confidence"];
+  dominantDrivers: string[];
+  cautionFlags: string[];
+  riskAdjustmentNote: string;
+  horizonAdjustmentNote: string;
+  uncertaintyNotes: string[];
 }
 
 export interface RecommendationTheme {
@@ -103,5 +115,6 @@ export interface RecommendationViewModel {
   methodology: MethodologyModel;
   recommendationDrivers: RecommendationDriver[];
   decisionSupport: DecisionSupportModel;
+  factorBreakdown: RecommendationFactorBreakdown[];
   disclosureItems: string[];
 }

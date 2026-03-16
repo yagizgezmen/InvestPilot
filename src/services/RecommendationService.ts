@@ -234,6 +234,10 @@ export class RecommendationService {
             investmentStrategy,
             factorBreakdown: scoreResult.factors,
             expectedReturnOutlook,
+            scoringContext: scoreResult.context,
+            scoreConfidence: scoreResult.confidence,
+            dominantDrivers: scoreResult.dominantDrivers,
+            cautionFlags: scoreResult.cautionFlags,
         };
     }
 
