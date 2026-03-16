@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import {
   ActionPlanCard,
   ChartWorkspaceCard,
+  DecisionSupportCard,
   DecisionHero,
   DetailAnalysisSection,
   MethodologyDrawer,
@@ -15,11 +16,11 @@ import {
   ProfileFitCard,
   RationaleList,
   RiskOverviewCard,
-  WhyNotInvestCard,
 } from "@/components/recommendation/RecommendationSections";
 import {
   buildActionPlan,
   buildDecisionHero,
+  buildDecisionSupport,
   buildDrivers,
   buildMethodology,
   buildProfileFit,
@@ -27,7 +28,7 @@ import {
   decisionTheme,
   deriveDecision,
 } from "@/components/recommendation/utils";
-import type { Decision, RecommendationViewModel } from "@/components/recommendation/types";
+import type { Decision, RecommendationViewModel, UserPreferenceProfile } from "@/components/recommendation/types";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 
 interface StrategyExperienceProps {
@@ -36,10 +37,15 @@ interface StrategyExperienceProps {
   detailMode?: boolean;
 }
 
-function buildViewModel(strategy: AssetStrategy, marketData: MarketData | null): RecommendationViewModel {
+function buildViewModel(
+  strategy: AssetStrategy,
+  marketData: MarketData | null,
+  userPreferences: UserPreferenceProfile | null,
+): RecommendationViewModel {
   const decision = deriveDecision(strategy, marketData);
   const theme = decisionTheme(decision);
   const riskOverview = buildRiskOverview(strategy, marketData);
+  const profileFit = buildProfileFit(strategy, decision, userPreferences);
 
   return {
     strategy,
@@ -49,10 +55,11 @@ function buildViewModel(strategy: AssetStrategy, marketData: MarketData | null):
     hero: buildDecisionHero(strategy, marketData, decision, riskOverview),
     riskOverview,
     actionPlan: buildActionPlan(strategy, decision),
-    profileFit: buildProfileFit(strategy, decision),
+    profileFit,
+    userPreferences,
     methodology: buildMethodology(strategy, marketData),
     recommendationDrivers: buildDrivers(strategy, marketData),
-    whyNotInvest: [...strategy.investmentStrategy.cons, ...strategy.investmentStrategy.limitations].slice(0, 4),
+    decisionSupport: buildDecisionSupport(strategy, decision, profileFit),
     disclosureItems: [
       ...strategy.investmentStrategy.assumptions.slice(0, 2),
       ...strategy.investmentStrategy.limitations.slice(0, 2),
@@ -66,46 +73,72 @@ export default function StrategyExperience({ ticker, parentTicker, detailMode = 
   const [loading, setLoading] = useState(true);
   const [strategy, setStrategy] = useState<AssetStrategy | null>(null);
   const [marketData, setMarketData] = useState<MarketData | null>(null);
+  const [userPreferences, setUserPreferences] = useState<UserPreferenceProfile | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
 
   useEffect(() => {
+    let isActive = true;
+
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [strategyResponse, marketDataResponse] = await Promise.all([
-          fetch(`/api/strategy/${ticker}`),
-          fetch(`/api/market-data?ticker=${ticker}`),
+        setLoadError(null);
+        setStrategy(null);
+        setMarketData(null);
+        setUserPreferences(null);
+        setIsMethodologyOpen(false);
+
+        const [strategyResponse, marketDataResponse, preferencesResponse] = await Promise.all([
+          fetch(`/api/strategy/${encodeURIComponent(ticker)}`),
+          fetch(`/api/market-data?ticker=${encodeURIComponent(ticker)}`),
+          fetch("/api/preferences"),
         ]);
 
         const strategyPayload = await strategyResponse.json();
-        const marketDataPayload = await marketDataResponse.json();
+        const marketDataPayload = marketDataResponse.ok ? await marketDataResponse.json() : null;
+        const preferencesPayload = preferencesResponse.ok ? await preferencesResponse.json() : null;
         const fetchedStrategy = strategyPayload?.strategy as AssetStrategy | undefined;
 
         if (!fetchedStrategy) {
-          setStrategy(null);
+          if (!isActive) return;
+          setLoadError(strategyPayload?.error ?? "Strategy data could not be loaded.");
           return;
         }
+
+        if (!isActive) return;
 
         setStrategy(fetchedStrategy);
         if (marketDataPayload && !marketDataPayload.error) {
           setMarketData(marketDataPayload);
         }
+        if (preferencesPayload?.preferences) {
+          setUserPreferences(preferencesPayload.preferences as UserPreferenceProfile);
+        }
       } catch (error) {
         console.error("Failed to load strategy details", error);
+        if (!isActive) return;
+        setLoadError("Strategy data could not be loaded.");
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     if (ticker) {
       fetchData();
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [ticker]);
 
   const viewModel = useMemo(() => {
     if (!strategy) return null;
-    return buildViewModel(strategy, marketData);
-  }, [strategy, marketData]);
+    return buildViewModel(strategy, marketData, userPreferences);
+  }, [strategy, marketData, userPreferences]);
 
   if (loading) {
     return (
@@ -123,7 +156,12 @@ export default function StrategyExperience({ ticker, parentTicker, detailMode = 
     return (
       <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
         <ShieldAlert className="h-12 w-12 text-destructive" />
-        <h1 className="text-2xl font-black">Strategy Not Found</h1>
+        <h1 className="text-2xl font-black">
+          {loadError ? "Unable to Load Strategy" : "Strategy Not Found"}
+        </h1>
+        <p className="max-w-md text-center text-sm text-muted-foreground">
+          {loadError ?? "The requested ticker did not return a strategy result."}
+        </p>
         <button onClick={() => router.back()} className="btn-premium">
           Go Back
         </button>
@@ -177,7 +215,7 @@ export default function StrategyExperience({ ticker, parentTicker, detailMode = 
           )}
 
           <ProfileFitCard profileFit={viewModel.profileFit} />
-          <WhyNotInvestCard items={viewModel.whyNotInvest} />
+          <DecisionSupportCard section={viewModel.decisionSupport} />
           <MethodologySummaryCard
             methodology={viewModel.methodology}
             disclosureItems={viewModel.disclosureItems}

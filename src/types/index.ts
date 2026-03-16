@@ -42,6 +42,46 @@ export type ChartDisplayType = "line" | "area" | "candlestick" | "baseline";
 
 export type RiskProfile = "Conservative" | "Balanced" | "Aggressive";
 export type TimeHorizon = "0-6m" | "6-24m" | "2y+";
+export type RecommendationFactorKey =
+  | "trendStrength"
+  | "shortTermMomentum"
+  | "mediumTermMomentum"
+  | "volatilityRisk"
+  | "drawdownRisk"
+  | "structuralTrendAlignment"
+  | "dataQuality";
+
+export interface RecommendationFactorBreakdown {
+  key: RecommendationFactorKey;
+  label: string;
+  rawValue: string;
+  normalizedScore: number;
+  weight: number;
+  weightedContribution: number;
+  impact: "Positive" | "Neutral" | "Negative";
+  summary: string;
+}
+
+export interface RecommendationScoreResult {
+  score: number;
+  confidence: "Low" | "Medium" | "High";
+  factors: RecommendationFactorBreakdown[];
+  dominantDrivers: string[];
+  cautionFlags: string[];
+  context: {
+    riskProfile: RiskProfile;
+    timeHorizon: TimeHorizon;
+  };
+}
+
+export interface ExpectedReturnOutlook {
+  summary: string;
+  confidence: "Low" | "Medium" | "High";
+  bullishCase: string;
+  baseCase: string;
+  bearishCase: string;
+  methodologyNote: string;
+}
 
 export interface RecommendationConstraints {
   avoidCrypto?: boolean;
@@ -129,6 +169,7 @@ export interface AdvancedRecommendationResponse {
   investmentStrategy: InvestmentStrategy;
   confidence: "Low" | "Medium" | "High";
   score: number; // 0-100
+  factorBreakdown?: RecommendationFactorBreakdown[];
 }
 
 export interface SectorAnalysisResponse extends AdvancedRecommendationResponse {
@@ -147,7 +188,7 @@ export interface AssetStrategy {
   assetClass: AssetClass;
   strategyName: string; // e.g. "Long-term Accumulation"
   riskScore: number; // 1-10
-  expectedReturn: string; // e.g. "15-20% p.a."
+  expectedReturn: string;
   entryZones: string[];
   exitZones: string[];
   allocationAdvice: string;
@@ -155,4 +196,6 @@ export interface AssetStrategy {
   technicalFactors: string[];
   fundamentalFactors: string[];
   investmentStrategy: InvestmentStrategy;
+  factorBreakdown?: RecommendationFactorBreakdown[];
+  expectedReturnOutlook?: ExpectedReturnOutlook;
 }

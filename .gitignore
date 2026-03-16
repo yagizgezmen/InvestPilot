@@ -16,6 +16,9 @@
 # next.js
 /.next/
 /out/
+/.next_buildcheck/
+/.next_hung_*/
+/.next_dirty_*/
 
 # production
 /build

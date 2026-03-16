@@ -11,8 +11,10 @@ import {
 } from "lucide-react";
 import type {
   ActionPlanModel,
+  DecisionSupportModel,
   Decision,
   DecisionHeroModel,
+  DecisionSupportItem,
   DriverStatus,
   MethodologyModel,
   ProfileFitModel,
@@ -21,6 +23,7 @@ import type {
   RecommendationTheme,
   RiskLevel,
   RiskOverviewModel,
+  UserPreferenceProfile,
 } from "./types";
 
 export function deriveDecision(strategy: AssetStrategy, marketData: MarketData | null): Decision {
@@ -196,6 +199,185 @@ export function buildRiskOverview(strategy: AssetStrategy, marketData: MarketDat
   };
 }
 
+function getFactorStatus(score?: number): DriverStatus {
+  if (score === undefined) return "Neutral";
+  if (score >= 65) return "Positive";
+  if (score <= 40) return "Cautious";
+  return "Neutral";
+}
+
+function getFactorScore(strategy: AssetStrategy, key: string): number | undefined {
+  return strategy.factorBreakdown?.find((factor) => factor.key === key)?.normalizedScore;
+}
+
+function pushDecisionSupportItem(
+  items: DecisionSupportItem[],
+  title: string,
+  status: DriverStatus,
+  explanation: string | undefined,
+) {
+  if (!explanation) return;
+  if (items.some((item) => item.title === title)) return;
+  items.push({ title, status, explanation });
+}
+export function buildDecisionSupport(
+  strategy: AssetStrategy,
+  decision: Decision,
+  profileFit: ProfileFitModel,
+): DecisionSupportModel {
+  const trendScore = getFactorScore(strategy, "trendStrength");
+  const shortMomentumScore = getFactorScore(strategy, "shortTermMomentum");
+  const mediumMomentumScore = getFactorScore(strategy, "mediumTermMomentum");
+  const volatilityScore = getFactorScore(strategy, "volatilityRisk");
+  const drawdownScore = getFactorScore(strategy, "drawdownRisk");
+  const structureScore = getFactorScore(strategy, "structuralTrendAlignment");
+  const dataQualityScore = getFactorScore(strategy, "dataQuality");
+
+  const items: DecisionSupportItem[] = [];
+
+  if (decision === "INVEST") {
+    pushDecisionSupportItem(
+      items,
+      "Trend Risk",
+      getFactorStatus(trendScore),
+      trendScore !== undefined && trendScore < 70
+        ? "Trend quality is supportive enough to invest, but it is not strong enough to ignore a failed trend continuation."
+        : "Trend structure is constructive, but the position still depends on the current trend staying intact after entry."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Volatility Control",
+      getFactorStatus(volatilityScore),
+      volatilityScore !== undefined && volatilityScore <= 45
+        ? "Volatility remains elevated enough that staged sizing and disciplined entries matter even with a positive recommendation."
+        : "Even in a cleaner setup, volatility can still create uneven entry timing and interim pullbacks."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Reward vs Risk",
+      getFactorStatus(structureScore),
+      structureScore !== undefined && structureScore < 60
+        ? "The upside case exists, but reward-to-risk improves only if price respects support and confirms above breakout levels."
+        : "The current setup is favorable, but the case weakens quickly if support fails after entry."
+    );
+    if (dataQualityScore !== undefined && dataQualityScore < 60) {
+      pushDecisionSupportItem(
+        items,
+        "Data Confidence",
+        "Cautious",
+        "Data quality is not ideal, so the invest case should still be reviewed against fresh prices before sizing up."
+      );
+    }
+  } else if (decision === "MONITOR") {
+    pushDecisionSupportItem(
+      items,
+      "Trend Confirmation",
+      getFactorStatus(trendScore),
+      trendScore !== undefined && trendScore < 55
+        ? "Trend strength is still mixed, which keeps this setup on watch instead of in active deployment."
+        : "Trend is improving, but it still needs cleaner confirmation before the system turns fully constructive."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Momentum Follow-Through",
+      getFactorStatus(mediumMomentumScore),
+      mediumMomentumScore !== undefined && mediumMomentumScore < 55
+        ? "Medium-term momentum is not yet strong enough to support a more bullish stance."
+        : "Momentum has stabilized, but follow-through is still not decisive enough to upgrade the call."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Structural Setup",
+      getFactorStatus(structureScore),
+      structureScore !== undefined && structureScore < 55
+        ? "Moving-average structure is not fully aligned yet, so waiting for a cleaner setup is more sensible."
+        : "Structural trend alignment is improving, but not enough to remove the wait-and-watch posture."
+    );
+    if (profileFit.fit === "Weak fit") {
+      pushDecisionSupportItem(
+        items,
+        "Profile Alignment",
+        "Cautious",
+        "The setup remains on watch partly because it does not line up cleanly with the current user profile."
+      );
+    }
+  } else {
+    pushDecisionSupportItem(
+      items,
+      "Weak Trend",
+      getFactorStatus(trendScore),
+      trendScore !== undefined && trendScore <= 45
+        ? "Trend quality is not strong enough to justify fresh exposure right now."
+        : "The trend does not provide enough support to offset the current downside risk."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Downside Risk",
+      getFactorStatus(drawdownScore),
+      drawdownScore !== undefined && drawdownScore <= 45
+        ? "Historical drawdown behavior remains too heavy for the current return outlook."
+        : "Downside resilience is still too weak relative to the current opportunity set."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Volatility Burden",
+      getFactorStatus(volatilityScore),
+      volatilityScore !== undefined && volatilityScore <= 45
+        ? "Volatility is elevated enough to make entries unattractive unless conditions improve materially."
+        : "The current setup still carries more volatility than the expected payoff justifies."
+    );
+    pushDecisionSupportItem(
+      items,
+      "Reward-to-Risk",
+      getFactorStatus(shortMomentumScore),
+      shortMomentumScore !== undefined && shortMomentumScore < 50
+        ? "Recent momentum is not compensating enough for the current risk profile."
+        : "The upside case does not look strong enough to justify the current risk and uncertainty."
+    );
+  }
+
+  if (items.length < 4 && dataQualityScore !== undefined && dataQualityScore < 65) {
+    pushDecisionSupportItem(
+      items,
+      "Data Quality",
+      "Cautious",
+      "Data freshness or sample depth is limiting confidence, so the recommendation should be treated more carefully."
+    );
+  }
+
+  if (items.length < 4 && profileFit.fit !== "Strong fit") {
+    pushDecisionSupportItem(
+      items,
+      "Profile Fit",
+      profileFit.fit === "Weak fit" ? "Cautious" : "Neutral",
+      profileFit.fit === "Weak fit"
+        ? "The setup does not align especially well with the current user profile, which weakens conviction."
+        : "Personal fit is acceptable but not strong enough to ignore execution and risk discipline."
+    );
+  }
+
+  const title =
+    decision === "INVEST"
+      ? "What to watch"
+      : decision === "MONITOR"
+        ? "Why waiting may be better right now"
+        : "Why avoid for now";
+
+  const eyebrow =
+    decision === "INVEST"
+      ? "Key Risks Before Entering"
+      : decision === "MONITOR"
+        ? "What Needs to Improve"
+        : "What Weakens the Case";
+
+  return {
+    title,
+    eyebrow,
+    tone: decision === "INVEST" ? "invest" : decision === "MONITOR" ? "monitor" : "avoid",
+    items: items.slice(0, 4),
+  };
+}
+
 function formatPrice(value?: number, currency?: string): string {
   if (value === undefined || value === null) return "Market price unavailable";
   const symbol = currency === "USD" ? "$" : currency === "TRY" ? "TRY " : currency ? `${currency} ` : "";
@@ -303,40 +485,121 @@ export function buildActionPlan(strategy: AssetStrategy, decision: Decision): Ac
   };
 }
 
-export function buildProfileFit(strategy: AssetStrategy, decision: Decision): ProfileFitModel {
-  let fit: ProfileFitLevel = "Moderate fit";
-  let score = 62;
+function mapRiskScoreToProfile(riskScore: number): UserPreferenceProfile["riskProfile"] {
+  if (riskScore >= 8) return "Aggressive";
+  if (riskScore <= 4) return "Conservative";
+  return "Balanced";
+}
 
-  if (decision === "INVEST" && strategy.riskScore <= 5) {
-    fit = "Strong fit";
-    score = 82;
-  } else if (decision === "AVOID" || strategy.riskScore >= 8) {
-    fit = "Weak fit";
-    score = 34;
+function mapDurationToHorizon(duration: string): UserPreferenceProfile["timeHorizon"] {
+  const normalized = duration.toLowerCase();
+  if (normalized.includes("1-3 month") || normalized.includes("3 month")) return "0-6m";
+  if (normalized.includes("24") || normalized.includes("18") || normalized.includes("12")) return "2y+";
+  return "6-24m";
+}
+
+function describeIncomePreference(incomePreference?: boolean): string | undefined {
+  if (incomePreference === undefined) return undefined;
+  return incomePreference ? "Income / stability tilt" : "Growth / appreciation tilt";
+}
+
+export function buildProfileFit(
+  strategy: AssetStrategy,
+  decision: Decision,
+  userPreferences?: UserPreferenceProfile | null,
+): ProfileFitModel {
+  const strategyRiskProfile = mapRiskScoreToProfile(strategy.riskScore);
+  const strategyHorizon = mapDurationToHorizon(strategy.investmentStrategy.plan.duration);
+  const strategyIncomeTilt =
+    strategy.investmentStrategy.recommendedMethod === "Wait" || strategy.riskScore <= 4
+      ? true
+      : strategy.riskScore >= 7 || strategy.investmentStrategy.recommendedMethod === "Lump Sum"
+        ? false
+        : undefined;
+
+  const effectivePreferences = userPreferences ?? null;
+  const displayedRiskProfile = effectivePreferences?.riskProfile ?? strategyRiskProfile;
+  const displayedTimeHorizon = effectivePreferences?.timeHorizon ?? strategy.investmentStrategy.plan.duration;
+  const displayedIncomePreference = describeIncomePreference(effectivePreferences?.incomePreference);
+
+  let score = effectivePreferences ? 58 : 52;
+  const notes: string[] = [];
+
+  const riskAligned = effectivePreferences ? effectivePreferences.riskProfile === strategyRiskProfile : false;
+  if (effectivePreferences) {
+    if (riskAligned) {
+      score += 18;
+      notes.push(`Risk profile aligns well: this setup behaves closer to a ${strategyRiskProfile.toLowerCase()} mandate than a mismatched risk bucket.`);
+    } else {
+      const riskMismatchPenalty =
+        (effectivePreferences.riskProfile === "Conservative" && strategyRiskProfile === "Aggressive") ||
+        (effectivePreferences.riskProfile === "Aggressive" && strategyRiskProfile === "Conservative")
+          ? 22
+          : 12;
+      score -= riskMismatchPenalty;
+      notes.push(`Risk profile is only partially aligned: the asset setup looks ${strategyRiskProfile.toLowerCase()}, while the user profile is ${effectivePreferences.riskProfile.toLowerCase()}.`);
+    }
+  } else {
+    notes.push(`Risk fit is inferred from the strategy risk score (${strategy.riskScore}/10), which maps closest to a ${strategyRiskProfile.toLowerCase()} investor profile.`);
   }
 
-  const inferredRiskProfile =
-    strategy.riskScore >= 8 ? "Aggressive" : strategy.riskScore <= 4 ? "Conservative" : "Balanced";
+  const horizonAligned = effectivePreferences ? effectivePreferences.timeHorizon === strategyHorizon : false;
+  if (effectivePreferences) {
+    if (horizonAligned) {
+      score += 14;
+      notes.push(`Time horizon fits cleanly: the recommended ${strategy.investmentStrategy.plan.duration.toLowerCase()} execution window matches the user's stated horizon.`);
+    } else {
+      score -= effectivePreferences.timeHorizon === "0-6m" && strategyHorizon === "2y+" ? 18 : 10;
+      notes.push(`Time horizon is not fully aligned: this idea is framed for ${strategy.investmentStrategy.plan.duration.toLowerCase()}, which may not suit the user's current window.`);
+    }
+  } else {
+    notes.push(`Time-horizon fit is estimated from the recommendation's ${strategy.investmentStrategy.plan.duration.toLowerCase()} execution window.`);
+  }
 
-  const notes = [
-    `Risk profile alignment currently leans ${inferredRiskProfile.toLowerCase()} based on a ${strategy.riskScore}/10 risk score.`,
-    `Time-horizon fit is tied to a ${strategy.investmentStrategy.plan.duration.toLowerCase()} execution window.`,
-    strategy.investmentStrategy.recommendedMethod === "DCA"
-      ? "This recommendation fits users who prefer gradual deployment over one-time entries."
-      : strategy.investmentStrategy.recommendedMethod === "Wait"
-        ? "This recommendation is better for users comfortable with patience and delayed execution."
-        : "This recommendation assumes the user can act with a more direct implementation style.",
-    "Income versus growth preference is not set explicitly, so fit is inferred from risk and execution style.",
-  ];
+  if (effectivePreferences?.incomePreference !== undefined) {
+    if (strategyIncomeTilt === undefined) {
+      notes.push("Income versus growth preference remains mixed here, so it is not a major fit driver.");
+    } else if (effectivePreferences.incomePreference === strategyIncomeTilt) {
+      score += 8;
+      notes.push(`Income versus growth preference is aligned with the strategy's ${strategyIncomeTilt ? "stability" : "growth"} bias.`);
+    } else {
+      score -= 8;
+      notes.push(`Income versus growth preference is not ideal for this setup because the strategy leans ${strategyIncomeTilt ? "stability" : "growth"} while the user prefers the opposite tilt.`);
+    }
+  } else {
+    notes.push(
+      strategy.investmentStrategy.recommendedMethod === "DCA"
+        ? "Execution style favors gradual deployment, which usually fits users comfortable building exposure over time."
+        : strategy.investmentStrategy.recommendedMethod === "Wait"
+          ? "Execution style favors patience, so suitability depends on whether the user is comfortable delaying deployment."
+          : "Execution style is more direct, which generally suits users comfortable acting on a defined setup."
+    );
+  }
+
+  if (strategy.riskScore >= 8 || decision === "AVOID") {
+    score -= 8;
+    notes.push("Elevated downside and volatility keep the fit capped unless the user explicitly tolerates higher-risk setups.");
+  } else if (strategy.riskScore <= 4 && decision === "INVEST") {
+    score += 6;
+    notes.push("Calmer risk characteristics improve fit for users who value smoother execution and lower interim drawdowns.");
+  }
+
+  score = Math.max(18, Math.min(92, score));
+
+  let fit: ProfileFitLevel = "Moderate fit";
+  if (score >= 76) fit = "Strong fit";
+  else if (score <= 42) fit = "Weak fit";
 
   return {
     fit,
     score,
-    riskProfile: inferredRiskProfile,
-    timeHorizon: strategy.investmentStrategy.plan.duration,
-    incomePreference: undefined,
-    notes,
-    profileComplete: false,
+    riskProfile: displayedRiskProfile,
+    timeHorizon: displayedTimeHorizon,
+    incomePreference: displayedIncomePreference,
+    notes: notes.slice(0, 4),
+    profileComplete:
+      Boolean(effectivePreferences) &&
+      effectivePreferences?.incomePreference !== undefined,
   };
 }
 

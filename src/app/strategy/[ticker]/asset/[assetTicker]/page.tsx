@@ -1,12 +1,27 @@
-"use client";
-
-import { useParams } from "next/navigation";
+import { notFound } from "next/navigation";
 import StrategyExperience from "@/components/StrategyExperience";
 
-export default function AssetStrategyDetailPage() {
-  const params = useParams();
-  const ticker = params.ticker as string;
-  const assetTicker = params.assetTicker as string;
+interface AssetStrategyDetailPageProps {
+  params: Promise<{
+    ticker?: string;
+    assetTicker?: string;
+  }>;
+}
 
-  return <StrategyExperience ticker={assetTicker} parentTicker={ticker} detailMode />;
+export default async function AssetStrategyDetailPage({ params }: AssetStrategyDetailPageProps) {
+  const { ticker, assetTicker } = await params;
+  const normalizedTicker = ticker?.trim().toUpperCase();
+  const normalizedAssetTicker = assetTicker?.trim().toUpperCase();
+
+  if (!normalizedTicker || !normalizedAssetTicker) {
+    notFound();
+  }
+
+  return (
+    <StrategyExperience
+      ticker={normalizedAssetTicker}
+      parentTicker={normalizedTicker}
+      detailMode
+    />
+  );
 }

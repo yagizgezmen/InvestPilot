@@ -23,6 +23,7 @@ import type {
   ActionPlanModel,
   Decision,
   DecisionHeroModel,
+  DecisionSupportModel,
   MethodologyModel,
   ProfileFitLevel,
   ProfileFitModel,
@@ -57,8 +58,8 @@ interface MethodologyDrawerProps {
   onClose: () => void;
 }
 
-interface WhyNotInvestCardProps {
-  items: string[];
+interface DecisionSupportCardProps {
+  section: DecisionSupportModel;
 }
 
 interface ChartWorkspaceCardProps {
@@ -404,10 +405,28 @@ export function ProfileFitCard({ profileFit }: ProfileFitCardProps) {
   );
 }
 
-export function WhyNotInvestCard({ items }: WhyNotInvestCardProps) {
+export function DecisionSupportCard({ section }: DecisionSupportCardProps) {
+  const badgeVariant =
+    section.tone === "invest" ? "warning" : section.tone === "monitor" ? "outline" : "destructive";
+  const tone = section.tone === "avoid" ? "risk" : "default";
+
   return (
-    <WorkspaceSection title="Why not invest now" eyebrow="Constraints" icon={ListTree} tone="risk">
-      <BulletList items={items} accent="text-destructive" />
+    <WorkspaceSection title={section.title} eyebrow={section.eyebrow} icon={ListTree} tone={tone}>
+      <div className="space-y-3">
+        {section.items.map((item, index) => (
+          <div key={`${item.title}-${index}`} className="rounded-2xl border border-border/30 bg-background/25 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-black text-foreground">{item.title}</div>
+                <p className="mt-2 text-sm leading-7 text-muted-foreground">{item.explanation}</p>
+              </div>
+              <Badge variant={item.status === "Positive" ? "success" : item.status === "Cautious" ? badgeVariant : "outline"}>
+                {item.status}
+              </Badge>
+            </div>
+          </div>
+        ))}
+      </div>
     </WorkspaceSection>
   );
 }

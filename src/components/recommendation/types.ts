@@ -7,11 +7,30 @@ export type DriverStatus = "Positive" | "Neutral" | "Cautious";
 export type RiskLevel = "Low" | "Moderate" | "High";
 export type ProfileFitLevel = "Strong fit" | "Moderate fit" | "Weak fit";
 
+export interface UserPreferenceProfile {
+  riskProfile: "Conservative" | "Balanced" | "Aggressive";
+  timeHorizon: "0-6m" | "6-24m" | "2y+";
+  incomePreference?: boolean;
+}
+
 export interface RecommendationDriver {
   title: string;
   status: DriverStatus;
   explanation: string;
   theme: "trend" | "momentum" | "volatility" | "market" | "attractiveness" | "portfolio";
+}
+
+export interface DecisionSupportItem {
+  title: string;
+  status: DriverStatus;
+  explanation: string;
+}
+
+export interface DecisionSupportModel {
+  title: string;
+  eyebrow: string;
+  tone: "invest" | "monitor" | "avoid";
+  items: DecisionSupportItem[];
 }
 
 export interface RiskOverviewModel {
@@ -80,8 +99,9 @@ export interface RecommendationViewModel {
   riskOverview: RiskOverviewModel | null;
   actionPlan: ActionPlanModel;
   profileFit: ProfileFitModel;
+  userPreferences: UserPreferenceProfile | null;
   methodology: MethodologyModel;
   recommendationDrivers: RecommendationDriver[];
-  whyNotInvest: string[];
+  decisionSupport: DecisionSupportModel;
   disclosureItems: string[];
 }
